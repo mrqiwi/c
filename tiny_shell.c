@@ -1,5 +1,7 @@
 /*tiny shell*/
 /*gcc tiny_shell.c -o tiny_shell -lreadline */
+
+#define _GNU_SOURCE     // for asprintf
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -8,6 +10,7 @@
 #include <sys/wait.h>
 #include <readline/readline.h>
 #include <readline/history.h>
+
 
 #define NRM  "\x1B[0m"
 #define RED  "\x1B[31m"
@@ -64,7 +67,7 @@ int execute_cmd(char **args)
 
     if (pid == 0) {
         if (execvp(args[0], args) == -1) {
-            fprintf(stderr, "incorrect command\n");
+            fprintf(stderr, "unknown command\n");
             exit(EXIT_FAILURE);
         }
     } else if (pid < 0) {
@@ -144,13 +147,15 @@ char *get_path(void)
 
 char *get_greeting(void)
 {
-    char buf[PATH_MAX], host[HOST_NAME_MAX];
+    char host[HOST_NAME_MAX];
+    char *user = getenv("USER");
     char *path = get_path();
+    char *buf;
 
     gethostname(host, HOST_NAME_MAX);
-    snprintf(buf, sizeof(buf), GRN "%s@%s %s%s " NRM, getenv("USER"), host, BLU, path);
+    asprintf(&buf, GRN "%s@%s" BLU " %s " NRM, user, host, path);
 
-    return strdup(buf);
+    return buf;
 }
 
 int main(void)

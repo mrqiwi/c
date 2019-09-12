@@ -1,17 +1,28 @@
 //клиент: nc localhost 5000
 #include <stdio.h>
 #include <sys/types.h>
+#include <sys/wait.h>	// for wait
 #include <sys/socket.h> // for socket
 #include <arpa/inet.h>  // for htons, htonl
 #include <string.h>		// for memset
 #include <errno.h>		// for errno
 #include <unistd.h>		// for write
-
+#include <signal.h>		// for signal
 
 #define SERV_PORT 5000
 #define LISTENQ   1024
 #define	MAXLINE	  1024
 
+
+void sig_chld(int signo)
+{
+	pid_t pid;
+	int stat;
+
+	pid = wait(&stat);
+
+  	return;
+}
 
 int main(void)
 {
@@ -23,6 +34,7 @@ int main(void)
 	size_t nleft;
 	ssize_t nwritten, nreaded;
 	char *pbuff;
+	struct sigaction act;
 
 	serverfd = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -51,6 +63,16 @@ int main(void)
 		return -1;
 	}
 
+	// для ожидания дочерних процессов
+	act.sa_handler = sig_chld;
+	act.sa_flags |= SA_RESTART;
+	sigemptyset(&act.sa_mask);
+
+	if (sigaction(SIGCHLD, &act, 0) < 0) {
+		fprintf(stderr, "Sigaction error: %s\n", strerror(errno));
+		return -1;
+	}
+
 	for (;;) {
 	   	clilen = sizeof(cliaddr);
 		clientfd = accept(serverfd, (struct sockaddr *)&cliaddr, &clilen);
@@ -71,6 +93,24 @@ int main(void)
 
 		if (pid == 0) {
 			close(serverfd);
+
+			nleft = sizeof(recbuff)-1;
+			pbuff = recbuff;
+
+			while (nleft > 0) {
+				nreaded = read(clientfd, pbuff, MAXLINE-1); /*-1 for '\0'*/
+
+				if (nreaded < 0) {
+					fprintf(stderr, "Read error: %s\n", strerror(errno));
+					return -1;
+				} else if ((nreaded == 0) || strstr(pbuff, "\0"))
+					break;
+
+				pbuff += nreaded;
+				nleft -= nreaded;
+			}
+
+		   	printf("Message: %s\n", recbuff);
 
 	    	snprintf(sendbuff, sizeof(sendbuff), "Hello, brother");
 
@@ -93,24 +133,6 @@ int main(void)
 
 			return 0;
 		}
-
-		nleft = sizeof(recbuff)-1;
-		pbuff = recbuff;
-
-		while (nleft > 0) {
-			nreaded = read(clientfd, pbuff, MAXLINE-1); /*-1 for '\0'*/
-
-			if (nreaded < 0) {
-				fprintf(stderr, "Read error: %s\n", strerror(errno));
-				return -1;
-			} else if ((nreaded == 0) || strstr(pbuff, "\0"))
-				break;
-
-			pbuff += nreaded;
-			nleft -= nreaded;
-		}
-
-	   	printf("Message: %s\n", recbuff);
 		close(clientfd);
 	}
 

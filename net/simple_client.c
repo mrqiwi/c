@@ -1,5 +1,5 @@
-//клиент: nc localhost 5000
 #include <stdio.h>
+#include <stdlib.h>     //for exit
 #include <sys/types.h>
 #include <sys/socket.h> // for socket
 #include <arpa/inet.h>  // for htons, htonl
@@ -13,14 +13,38 @@
 #define	MAXLINE	  1024
 
 
+int open_connection(int portnum, char *address);
+int writen(int fd, char *buff, size_t nbytes);
+int readn(int fd, char *buff, size_t nbytes);
+
+
 int main(void)
 {
 	int sockfd;
+	char buffer[MAXLINE];
+
+	sockfd = open_connection(SERV_PORT, SERV_ADDR);
+
+	if (sockfd < 0)
+		exit(1);
+
+	snprintf(buffer, sizeof(buffer), "Hello dude\n");
+
+	if (writen(sockfd, buffer, strlen(buffer)) < 0)
+		exit(1);
+
+	if (readn(sockfd, buffer, sizeof(buffer)) < 0)
+		exit(1);
+
+	printf("Message: %s\n", buffer);
+
+	return 0;
+}
+
+int open_connection(int portnum, char *address)
+{
+	int sockfd;
 	struct sockaddr_in servaddr;
-	char sendbuff[MAXLINE], recbuff[MAXLINE];
-	size_t nleft;
-	ssize_t nwritten, nreaded;
-	char *pbuff;
 
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -31,9 +55,9 @@ int main(void)
 
 	memset(&servaddr, 0, sizeof(servaddr));
 	servaddr.sin_family = AF_INET;
-	servaddr.sin_port = htons(SERV_PORT);
+	servaddr.sin_port = htons(portnum);
 
-	if (inet_pton(AF_INET, SERV_ADDR, &servaddr.sin_addr) <= 0) {
+	if (inet_pton(AF_INET, address, &servaddr.sin_addr) <= 0) {
 		fprintf(stderr, "Inet_pton error: %s\n", strerror(errno));
 		return -1;
 	}
@@ -43,13 +67,41 @@ int main(void)
 		return -1;
 	}
 
-	snprintf(sendbuff, sizeof(sendbuff), "Hello dude");
+	return sockfd;
+}
 
-	nleft = strlen(sendbuff)+1; /*+1 for '\0'*/
-	pbuff = sendbuff;
+int readn(int fd, char *buff, size_t nbytes)
+{
+	size_t nleft;
+	ssize_t nreaded;
+
+	nleft = nbytes-1;	/*-1 for '\0'*/
 
 	while (nleft > 0) {
-		if ((nwritten = write(sockfd, pbuff, nleft)) <= 0) {
+		nreaded = read(fd, buff, nleft);
+
+		if (nreaded < 0) {
+			fprintf(stderr, "Read error: %s\n", strerror(errno));
+			return -1;
+		} else if ((nreaded == 0) || strstr(buff, "\0"))
+			break;
+
+		nleft -= nreaded;
+		buff += nreaded;
+	}
+
+	return nbytes - nleft;
+}
+
+int writen(int fd, char *buff, size_t nbytes)
+{
+	size_t nleft;
+	ssize_t nwritten;
+
+	nleft = nbytes+1;	/*+1 for '\0'*/
+
+	while (nleft > 0) {
+		if ((nwritten = write(fd, buff, nleft)) <= 0) {
 			if (nwritten < 0 && errno == EINTR)
 				nwritten = 0;
 			else {
@@ -59,26 +111,8 @@ int main(void)
 		}
 
 		nleft -= nwritten;
-		pbuff  += nwritten;
+		buff  += nwritten;
 	}
 
-	nleft = sizeof(recbuff);
-	pbuff = recbuff;
-
-	while (nleft > 0) {
-		nreaded = read(sockfd, pbuff, MAXLINE-1); /*-1 for '\0'*/
-
-		if (nreaded < 0) {
-			fprintf(stderr, "Read error: %s\n", strerror(errno));
-			return -1;
-		} else if ((nreaded == 0) || strstr(pbuff, "\0"))
-			break;
-
-		pbuff += nreaded;
-		nleft -= nreaded;
-	}
-
-	printf("Message: %s\n", recbuff);
-
-	return 0;
+	return nbytes;
 }

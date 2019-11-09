@@ -3,17 +3,15 @@
 
 int main(void)
 {
-	char progress[] = "-\\|/";
-	int i = 0;
+    const char *progress = "-\\|/";
 
-	while(1) {
-		printf("\r%c waiting...", progress[i == 4 ? i = 0 : i]);
-		usleep(500000);
-       	fflush(stdout);
-       	i++;
+    for (const char *ptr = progress;; ptr++) {
+        if (*ptr == '\0')
+            ptr = progress;
+        printf("\r%c progress...", *ptr);
+        usleep(500000);
+        fflush(stdout);
     }
 
-   printf("\n");
-
-   return 0;
+    return 0;
 }

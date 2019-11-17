@@ -71,7 +71,7 @@ out:
 
 char *change_name(const char *name, const char *suffix)
 {
-    char *buf = calloc(1024, sizeof(char));
+    char *buf = calloc(PATH_MAX, sizeof(char));
 
     if (!buf) {
         printf("malloc() error\n");
@@ -79,9 +79,9 @@ char *change_name(const char *name, const char *suffix)
     }
 
     if (suffix) {
-        snprintf(buf, 1024, "%s%s", name, suffix);
+        snprintf(buf, PATH_MAX, "%s%s", name, suffix);
     } else {
-        strncpy(buf, name, 1024-1);
+        strncpy(buf, name, PATH_MAX-1);
         char *ptr = strrchr(buf, '.');
         *ptr = '\0';
     }

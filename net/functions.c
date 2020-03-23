@@ -116,7 +116,7 @@ int sendall(int fd, char *buff, size_t nbytes)
         if ((sent = send(fd, buff, nbytes, 0)) <= 0) {
             if (sent < 0 && errno == EINTR)
                 sent = 0;
-            else {
+            else if (sent < 0){
                 perror("send error");
                 return -1;
             }

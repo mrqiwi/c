@@ -13,24 +13,23 @@
 
 void add_to_pfds(struct pollfd *pfds[], int newfd, int *fd_count, int *fd_size)
 {
-    // If we don't have room, add more space in the pfds array
+    // если кол-во сокетов достигло максимума, то выделяем еще
     if (*fd_count == *fd_size) {
-        *fd_size *= 2; // Double it
-
+        *fd_size *= 2;
         *pfds = realloc(*pfds, sizeof(**pfds) * (*fd_size));
     }
-
+    // сэтим новый сокет
     (*pfds)[*fd_count].fd = newfd;
-    (*pfds)[*fd_count].events = POLLIN; // Check ready-to-read
+    (*pfds)[*fd_count].events = POLLIN;
 
     (*fd_count)++;
 }
 
 void del_from_pfds(struct pollfd pfds[], int i, int *fd_count)
 {
-    // Copy the one from the end over this one
+    // копируем последний элемент вместо текущего
     pfds[i] = pfds[*fd_count-1];
-
+    // уменьшаем кол-во элементов
     (*fd_count)--;
 }
 
@@ -77,7 +76,7 @@ int main(void)
                         printf("new connection from %s:%s on socket %d\n", hoststr, portstr, clientfd);
                     }
                 } else {
-                    nbytes = recv(pfds[i].fd, buf, sizeof buf, 0);
+                    nbytes = recv(pfds[i].fd, buffer, sizeof buffer, 0);
                     sender_fd = pfds[i].fd;
 
                     if (nbytes <= 0) {
@@ -94,7 +93,7 @@ int main(void)
                             dest_fd = pfds[j].fd;
 
                             if (dest_fd != serverfd && dest_fd != sender_fd) {
-                                if (sendall(dest_fd, buf, nbytes, 0) == -1) {
+                                if (sendall(dest_fd, buffer, nbytes) == -1) {
                                     perror("send error");
                                 }
                             }

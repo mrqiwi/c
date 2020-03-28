@@ -2,11 +2,13 @@
 #include <stdbool.h>
 #include <yaml.h>
 
+#define SIZE 64
+
 typedef struct {
-  char address[64];
-  char port[64];
-  char username[64];
-  char password[64];
+  char address[SIZE];
+  char port[SIZE];
+  char username[SIZE];
+  char password[SIZE];
 } conf_t;
 
 int main(void)
@@ -45,8 +47,7 @@ int main(void)
                     else
                         printf("Unrecognised key: %s\n", tk);
                 } else {
-                    /* *data = strdup(tk); */
-                    strncpy(data, tk, 64);
+                    strncpy(data, tk, SIZE);
                 }
                 break;
             default: break;
@@ -63,11 +64,6 @@ int main(void)
     printf("port = %s\n", conf.port);
     printf("username = %s\n", conf.username);
     printf("password= %s\n", conf.password);
-
-    /* free(conf.address); */
-    /* free(conf.port); */
-    /* free(conf.username); */
-    /* free(conf.password); */
 
     return 0;
 }

@@ -7,7 +7,7 @@
 int main(void)
 {
 	int sockfd;
-	char buffer[MAXLINE];
+	char buffer[BUFSIZE];
 
 	sockfd = open_connection(SERV_ADDR, SERV_PORT);
 

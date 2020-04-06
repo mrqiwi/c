@@ -4,8 +4,9 @@
 #define SERV_ADDR "127.0.0.1"
 #define SERV_PORT "5000"
 #define PORTLEN   8
-#define MAXLINE   1024
+#define BUFSIZE   1024
 #define LISTENQ   1024
+#define PORTLEN   8
 
 int open_connection(char *address, char *portnum);
 int open_listen_fd(char *portnum);

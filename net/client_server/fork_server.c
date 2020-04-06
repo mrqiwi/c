@@ -18,7 +18,7 @@ static void sig_chld(int signo)
 
 int main(void)
 {
-	char buffer[MAXLINE];
+	char buffer[BUFSIZE];
     char hoststr[INET_ADDRSTRLEN], portstr[INET_ADDRSTRLEN];
 	int serverfd, clientfd;
 	pid_t pid;

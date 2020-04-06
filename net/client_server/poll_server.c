@@ -35,7 +35,7 @@ void del_from_pfds(struct pollfd pfds[], int i, int *fd_count)
 
 int main(void)
 {
-    char buffer[MAXLINE];
+    char buffer[BUFSIZE];
     char hoststr[INET_ADDRSTRLEN];
     char portstr[PORTLEN];
     int serverfd, clientfd;

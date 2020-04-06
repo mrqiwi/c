@@ -8,7 +8,7 @@
 
 int main(void)
 {
-	char buffer[MAXLINE] = {0};
+	char buffer[BUFSIZE] = {0};
     char hoststr[INET_ADDRSTRLEN], portstr[INET_ADDRSTRLEN];
 	int serverfd, clientfd;
 	socklen_t clilen;

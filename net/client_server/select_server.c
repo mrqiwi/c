@@ -8,7 +8,7 @@
 
 int main(void)
 {
-	char buffer[MAXLINE];
+	char buffer[BUFSIZE];
     char hoststr[INET_ADDRSTRLEN], portstr[PORTLEN];
 	socklen_t clilen;
     struct sockaddr_storage cliaddr;

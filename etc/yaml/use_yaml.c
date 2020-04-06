@@ -47,7 +47,7 @@ int main(void)
                     else
                         printf("Unrecognised key: %s\n", tk);
                 } else {
-                    strncpy(data, tk, SIZE);
+                    strncpy(data, tk, SIZE-1);
                 }
                 break;
             default: break;

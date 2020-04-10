@@ -8,16 +8,17 @@
 
 #include "../functions.h"
 
-int main(void)
+int main(int argc, char **argv)
 {
-    int nbytes;
-    char buf[MAXLINE];
-    char fname[] = "night.jpg";
+    if (argc != 2) {
+        printf("usage: progname filename\n");
+        return -1;
+    }
 
-    int sock = open_connection(SERV_ADDR, SERV_PORT);
-
-    if (sock < 0)
-        exit(1);
+    char buf[KBYTE];
+    char *fname = argv[1];
+    char *dynbuf = NULL;
+    ssize_t nbytes, dynsize = 0;
 
     int fd = open(fname, O_RDONLY);
 
@@ -26,37 +27,34 @@ int main(void)
         exit(1);
     }
 
-
     while ((nbytes = read(fd, buf, sizeof(buf))) > 0 ) {
-        printf("---nbytes = %d--\n", nbytes);
+        dynsize += nbytes;
+        dynbuf = realloc(dynbuf, dynsize);
 
-        msgpack_sbuffer *buffer = msgpack_sbuffer_new();
-        msgpack_packer *pk = msgpack_packer_new(buffer, msgpack_sbuffer_write);
-
-        msgpack_pack_map(pk, 1);
-        msgpack_pack_str(pk, sizeof(fname));
-        msgpack_pack_str_body(pk, fname, sizeof(fname));
-        msgpack_pack_bin(pk, nbytes);
-        msgpack_pack_bin_body(pk, buf, nbytes);
-
-        send(sock, buffer->data, buffer->size, 0);
-
-        printf("---buffer->size = %lu--\n", buffer->size);
-
-        /* memset(buf, 0, sizeof(buf)); */
-        msgpack_sbuffer_clear(buffer);
-        msgpack_packer_free(pk);
+        ssize_t offset = dynsize - nbytes;
+        memcpy(dynbuf+offset, buf, nbytes);
     }
 
-
-    /* if (send(sock, buffer->data, buffer->size, 0) < 0) { */
-    /*     perror("cannot send data"); */
-    /*     exit(1); */
-    /* } */
-
-    /* msgpack_sbuffer_clear(buffer); */
-    /* msgpack_packer_free(pk); */
     close(fd);
+
+    msgpack_sbuffer *buffer = msgpack_sbuffer_new();
+    msgpack_packer *pk = msgpack_packer_new(buffer, msgpack_sbuffer_write);
+
+    msgpack_pack_map(pk, 1);
+    msgpack_pack_str(pk, strlen(fname)+1);
+    msgpack_pack_str_body(pk, fname, strlen(fname)+1);
+    msgpack_pack_bin(pk, dynsize);
+    msgpack_pack_bin_body(pk, dynbuf, dynsize);
+
+    int sock = open_connection(SERV_ADDR, SERV_PORT);
+
+    if (sock < 0)
+        exit(1);
+
+    send(sock, buffer->data, buffer->size, 0);
+
+    msgpack_sbuffer_clear(buffer);
+    msgpack_packer_free(pk);
     close(sock);
 
     return 0;

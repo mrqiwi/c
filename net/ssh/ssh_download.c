@@ -1,8 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <fcntl.h>
 #include <libssh/libssh.h>
+
 int main(int argc, char *argv[])
 {
     if (argc < 3) {
@@ -18,10 +19,12 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    printf("username: ");
+    printf("Username: ");
     char username[64];
     fgets(username, sizeof(username), stdin);
     username[strlen(username)-1] = 0;
+
+    char *passwd = getpass("Password: ");
 
     ssh_options_set(ssh, SSH_OPTIONS_HOST, hostname);
     ssh_options_set(ssh, SSH_OPTIONS_PORT, &port);
@@ -34,7 +37,7 @@ int main(int argc, char *argv[])
     }
 
     printf("Connected to %s on port %d.\n", hostname, port);
-    printf("Banner:\n%s\n", ssh_get_serverbanner(ssh));
+    /* printf("Banner:\n%s\n", ssh_get_serverbanner(ssh)); */
 
     ssh_key key;
     if (ssh_get_server_publickey(ssh, &key) != SSH_OK) {
@@ -49,24 +52,21 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    printf("Host public key hash:\n");
-    ssh_print_hash(SSH_PUBLICKEY_HASH_SHA1, hash, hash_len);
+    /* printf("Host public key hash:\n"); */
+    /* ssh_print_hash(SSH_PUBLICKEY_HASH_SHA1, hash, hash_len); */
 
     ssh_clean_pubkey_hash(&hash);
     ssh_key_free(key);
 
-    printf("Checking ssh_session_is_known_server()\n");
+    /* printf("Checking ssh_session_is_known_server()\n"); */
     enum ssh_known_hosts_e known = ssh_session_is_known_server(ssh);
     switch (known) {
         case SSH_KNOWN_HOSTS_OK: printf("Host Known.\n"); break;
-
         case SSH_KNOWN_HOSTS_CHANGED: printf("Host Changed.\n"); break;
         case SSH_KNOWN_HOSTS_OTHER: printf("Host Other.\n"); break;
         case SSH_KNOWN_HOSTS_UNKNOWN: printf("Host Unknown.\n"); break;
         case SSH_KNOWN_HOSTS_NOT_FOUND: printf("No host file.\n"); break;
-
-        case SSH_KNOWN_HOSTS_ERROR:
-            printf("Host error. %s\n", ssh_get_error(ssh)); return -1;
+        case SSH_KNOWN_HOSTS_ERROR: printf("Host error. %s\n", ssh_get_error(ssh)); return -1;
 
         default: printf("Error. Known: %d\n", known); return -1;
     }
@@ -85,12 +85,7 @@ int main(int argc, char *argv[])
         ssh_session_update_known_hosts(ssh);
     }
 
-    printf("Password: ");
-    char password[128];
-    fgets(password, sizeof(password), stdin);
-    password[strlen(password)-1] = 0;
-
-    if (ssh_userauth_password(ssh, 0, password) != SSH_AUTH_SUCCESS) {
+    if (ssh_userauth_password(ssh, 0, passwd) != SSH_AUTH_SUCCESS) {
         fprintf(stderr, "ssh_userauth_password() failed.\n%s\n", ssh_get_error(ssh));
         return 0;
     } else {
@@ -122,7 +117,7 @@ int main(int argc, char *argv[])
     char *fname = strdup(ssh_scp_request_get_filename(scp));
     int fpermission = ssh_scp_request_get_permissions(scp);
 
-    printf("Downloading file %s (%d bytes, permissions 0%o\n", fname, fsize, fpermission);
+    printf("Downloading file %s (%d bytes, permissions 0%o)\n", fname, fsize, fpermission);
     free(fname);
 
     char *buffer = malloc(fsize);
@@ -137,14 +132,23 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    printf("Received %s:\n", filename);
-    printf("%.*s\n", fsize, buffer);
+    int fd = open(filename, O_WRONLY | O_APPEND | O_CREAT, fpermission);
+    if (fd < 0) {
+        fprintf(stderr, "open() failed.\n");
+        return -1;
+    }
+
+    write(fd, buffer, fsize);
+
     free(buffer);
+    close(fd);
 
     if (ssh_scp_pull_request(scp) != SSH_SCP_REQUEST_EOF) {
         fprintf(stderr, "ssh_scp_pull_request() unexpected.\n%s\n", ssh_get_error(ssh));
         return -1;
     }
+
+    printf("Finished.\n");
 
     ssh_scp_close(scp);
     ssh_scp_free(scp);

@@ -16,7 +16,8 @@ int main(int argc, char *argv[])
     OpenSSL_add_all_algorithms();
     SSL_load_error_strings();
 
-    SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
+    /* SSL_CTX *ctx = SSL_CTX_new(TLS_client_method()); */
+    SSL_CTX *ctx = SSL_CTX_new(SSLv23_client_method());
     if (!ctx) {
         fprintf(stderr, "SSL_CTX_new() failed.\n");
         return -1;
@@ -97,41 +98,14 @@ int main(int argc, char *argv[])
     printf("Connected.\n");
     printf("To send data, enter text followed by enter.\n");
 
-    while(1) {
-        int nbytes;
-        char msg_buff[BSIZE];
-        fd_set reads;
-        FD_ZERO(&reads);
-        FD_SET(socket_peer, &reads);
-        FD_SET(0, &reads);
+    char msg_buff[BSIZE];
+    fgets(msg_buff, BSIZE, stdin);
+    printf("Sending: %s", msg_buff);
+    int nbytes = SSL_write(ssl, msg_buff, strlen(msg_buff));
+    printf("Sent %d bytes.\n", nbytes);
 
-        struct timeval timeout;
-        timeout.tv_sec = 0;
-        timeout.tv_usec = 100000;
-
-        if (select(socket_peer + 1, &reads, 0, 0, NULL) < 0) {
-            fprintf(stderr, "select() failed. (%d)\n", errno);
-            return -1;
-        }
-
-        if (FD_ISSET(socket_peer, &reads)) {
-            nbytes = SSL_read(ssl, msg_buff, BSIZE);
-            if (nbytes < 1) {
-                printf("Connection closed by peer.\n");
-                break;
-            }
-            printf("Received (%d bytes): %.*s", nbytes, nbytes, msg_buff);
-        }
-        //TODO как то связано с ssl?
-        if (FD_ISSET(0, &reads)) {
-            puts("---2---");
-            if (!fgets(msg_buff, BSIZE, stdin))
-                break;
-            printf("Sending: %s", msg_buff);
-            nbytes = SSL_write(ssl, msg_buff, strlen(msg_buff));
-            printf("Sent %d bytes.\n", nbytes);
-        }
-    }
+    nbytes = SSL_read(ssl, msg_buff, BSIZE);
+    printf("Received (%d bytes): %.*s\n", nbytes, nbytes, msg_buff);
 
     printf("Closing socket...\n");
     SSL_shutdown(ssl);

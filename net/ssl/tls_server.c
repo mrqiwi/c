@@ -25,7 +25,8 @@ int main(int argc, char **argv)
     OpenSSL_add_all_algorithms();
     SSL_load_error_strings();
 
-    SSL_CTX *ctx = SSL_CTX_new(TLS_server_method());
+    /* SSL_CTX *ctx = SSL_CTX_new(TLS_server_method()); */
+    SSL_CTX *ctx = SSL_CTX_new(SSLv23_server_method());
     if (!ctx) {
         fprintf(stderr, "SSL_CTX_new() failed.\n");
         return -1;
@@ -68,33 +69,22 @@ int main(int argc, char **argv)
         return -1;
     }
 
-
     printf("Waiting for connections...\n");
-
     while(1) {
-        fd_set reads;
-        FD_ZERO(&reads);
-        FD_SET(socket_listen, &reads);
-
-        if (select(socket_listen + 1, &reads, 0, 0, NULL) < 0) {
-            fprintf(stderr, "select() failed. (%d)\n", errno);
-            return -1;
-        }
-
         struct sockaddr_storage client_address;
         socklen_t client_len = sizeof(client_address);
         int socket_client = accept(socket_listen, (struct sockaddr*) &client_address, &client_len);
         if (socket_client < 0) {
             fprintf(stderr, "accept() failed. (%d)\n", errno);
-            return -1;
+            return 1;
         }
 
         char address_buffer[100];
-        getnameinfo((struct sockaddr*)&client_address, client_len,
-                    address_buffer, sizeof(address_buffer), 0, 0,
-                    NI_NUMERICHOST);
-
-        printf("New connection from %s.\n", address_buffer);
+        getnameinfo((struct sockaddr*)&client_address,
+                client_len,
+                address_buffer, sizeof(address_buffer), 0, 0,
+                NI_NUMERICHOST);
+        printf("New connection from %s\n", address_buffer);
 
         SSL *ssl = SSL_new(ctx);
         if (!ssl) {
@@ -118,6 +108,10 @@ int main(int argc, char **argv)
         printf("Reading request...\n");
         char msg_buff[BSIZE];
         int nbytes = SSL_read(ssl, msg_buff, BSIZE);
+        if (nbytes < 1) {
+            close(socket_client);
+            continue;
+        }
         printf("Received %d bytes.\n", nbytes);
         printf("From client: %.*s", nbytes, msg_buff);
 

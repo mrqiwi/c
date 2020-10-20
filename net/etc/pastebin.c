@@ -29,27 +29,34 @@ static char *generate_pattern(char *filename)
         return NULL;
     }
 
-    off_t len = lseek(fd, 0, SEEK_END);
-    if (len < 0) {
+    off_t size = lseek(fd, 0, SEEK_END);
+    if (size < 0) {
+        close(fd);
         perror("lseek() failed");
         return NULL;
     }
 
-    void *buffer = mmap(0, len, PROT_READ, MAP_PRIVATE, fd, 0);
+    char *buffer = (char *)mmap(0, size, PROT_READ, MAP_PRIVATE, fd, 0);
     if (buffer == MAP_FAILED) {
+        close(fd);
         perror("mmap() failed");
         return NULL;
     }
 
-    int length = snprintf(NULL, 0, PATTERN, filetype, getenv("PASTEBIN"), (char *)buffer) + 1;
+    int length = snprintf(NULL, 0, PATTERN, filetype, getenv("PASTEBIN"), buffer) + 1;
 
     char *data = malloc(length);
     if (!data) {
+        close(fd);
+        munmap(buffer, size);
         perror("malloc() failed");
         return NULL;
     }
 
-    snprintf(data, length, PATTERN, filetype, getenv("PASTEBIN"), (char *)buffer);
+    snprintf(data, length, PATTERN, filetype, getenv("PASTEBIN"), buffer);
+
+    close(fd);
+    munmap(buffer, size);
 
     return data;
 }

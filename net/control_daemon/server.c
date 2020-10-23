@@ -242,9 +242,9 @@ int shut_down(char *action)
     sync();
     setuid(0);
 
-    if (strcmp(action, "r"))
+    if (!strcmp(action, "r"))
     	reboot(RB_AUTOBOOT);
-    else if (strcmp(action, "s"))
+    else if (!strcmp(action, "s"))
     	reboot(RB_POWER_OFF);
 
     exit(0);

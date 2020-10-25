@@ -15,7 +15,7 @@
                 "&api_dev_key=%s" \
                 "&api_paste_code=%s"
 
-static char *generate_pattern(char *filename)
+static char *generate_request(char *filename)
 {
     char *filetype = strrchr(filename, '.');
     if (filetype)
@@ -61,6 +61,30 @@ static char *generate_pattern(char *filename)
     return data;
 }
 
+int send_request(char *data)
+{
+    CURL *curl = curl_easy_init();
+    if (!curl)
+        return -1;
+
+    curl_easy_setopt(curl, CURLOPT_URL, "https://pastebin.com/api/api_post.php");
+    curl_easy_setopt(curl, CURLOPT_POST, 1L);
+    //NOTE некорректный размер Content-Lenght, не понятно почему
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, strlen(data));
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data);
+    /* curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L); */
+
+    CURLcode res = curl_easy_perform(curl);
+    curl_easy_cleanup(curl);
+
+    if (res != CURLE_OK) {
+        printf("curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+        return -1;
+    }
+
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     int res = 0;
@@ -83,29 +107,19 @@ int main(int argc, char **argv)
         };
     };
 
-    char *data = generate_pattern(filename);
-    if (data == NULL)
+    char *data = generate_request(filename);
+    if (data == NULL) {
+        puts("cannot generate request");
         return -1;
-
-    CURL *curl = curl_easy_init();
-    if (curl) {
-        curl_easy_setopt(curl, CURLOPT_URL, "https://pastebin.com/api/api_post.php");
-        curl_easy_setopt(curl, CURLOPT_POST, 1L);
-        //TODO опробовать такой вариант
-        /* curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, strlen(data)); */
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data);
-        /* curl_easy_setopt(curl, CURLOPT_VERBOSE, 1); */
-        curl_easy_setopt(curl, CURLOPT_NOBODY, 0);
-
-        CURLcode res = curl_easy_perform(curl);
-
-        if (res != CURLE_OK)
-            printf("curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-
-        free(data);
-        curl_easy_cleanup(curl);
     }
 
-    /* curl_global_cleanup(); */
+    res = send_request(data);
+    free(data);
+
+    if (res < 0) {
+        puts("cannot send request");
+        return -1;
+    }
+
     return 0;
 }

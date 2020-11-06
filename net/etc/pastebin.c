@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -66,7 +67,7 @@ static char *url_encoded_string(CURL *curl, const char *filename)
     return encoded;
 }
 
-int send_request(char *filename)
+int send_request(char *filename, bool is_debug)
 {
     CURL *curl = curl_easy_init();
     if (!curl) {
@@ -92,7 +93,8 @@ int send_request(char *filename)
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "pastebin 1.0");
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request);
-    /* curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L); */
+    if (is_debug)
+        curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 
     CURLcode res = curl_easy_perform(curl);
     curl_easy_cleanup(curl);
@@ -108,26 +110,38 @@ int send_request(char *filename)
 int main(int argc, char **argv)
 {
     int res = 0;
-    char *filename;
+    char *filename = NULL;
+    bool is_debug = false;
 
-    if (argc == 1) {
-        puts("usage: pastebin -f <filename>");
-        return 0;
-    }
-
-    while ((res = getopt(argc, argv, "f:h")) != -1) {
+    while ((res = getopt(argc, argv, "f:dh")) != -1) {
         switch (res) {
             case 'f':
                 filename = optarg;
             break;
 
+            case 'd':
+                is_debug = true;
+            break;
+
+            case 'h':
+                puts("options:\n"
+                        "\t-f - file path\n"
+                        "\t-d - enable debug\n"
+                        "\t-h - print help");
+            return 0;
+
             case '?':
                 puts("usage: pastebin -f <filename>");
-            break;
+            return -1;
         };
     };
 
-    if (send_request(filename) < 0) {
+    if (!filename) {
+        puts("usage: pastebin -f <filename>");
+        return -1;
+    }
+
+    if (send_request(filename, is_debug) < 0) {
         puts("cannot send request");
         return -1;
     }

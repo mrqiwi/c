@@ -3,7 +3,7 @@
 -out YOURPUBLIC.crt \
 -subj "/C=RU/ST=Saint-Petersburg/L=Saint-Petersburg/O=Example Inc/CN=<IP-address>"
 // 2) openssl x509 -in YOURPUBLIC.crt -out YOURPUBLIC.pem -outform PEM
-// 3) curl -F "url=https://<IP-address>:8443/<TOKEN>" -F "certificate=@YOURPUBLIC.pem" https://api.telegram.org/bot<TOKEN>/setWebhook
+// 3) curl -F "url=https://<IP-address>:443/<TOKEN>" -F "certificate=@YOURPUBLIC.pem" https://api.telegram.org/bot<TOKEN>/setWebhook
 #include <unistd.h>
 #include <netdb.h>
 #include <pwd.h>
@@ -210,7 +210,6 @@ ssize_t recvall(SSL *ssl, void *buffer, size_t n)
             else
                 return -1;
         }
-
         total += readed;
         buf += readed;
     }

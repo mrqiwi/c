@@ -4,6 +4,7 @@
 -subj "/C=RU/ST=Saint-Petersburg/L=Saint-Petersburg/O=Example Inc/CN=<IP-address>"
 // 2) openssl x509 -in YOURPUBLIC.crt -out YOURPUBLIC.pem -outform PEM
 // 3) curl -F "url=https://<IP-address>:443/<TOKEN>" -F "certificate=@YOURPUBLIC.pem" https://api.telegram.org/bot<TOKEN>/setWebhook
+#include <string.h>
 #include <unistd.h>
 #include <netdb.h>
 #include <pwd.h>
@@ -16,7 +17,8 @@
 #define USERNAME "sergey"
 #define PRIVATEKEY "YOURPRIVATE.key"
 #define CERTIFICATE "YOURPUBLIC.crt"
-#define PORT "443"
+#define LISTENPORT "8443"
+#define SENDPORT "443"
 #define HOST "api.telegram.org"
 #define REQUEST_PATTERN "POST /bot%s/sendMessage HTTP/1.1\r\n" \
                         "Host: myhost.com\r\n" \
@@ -29,27 +31,6 @@ typedef struct {
     int date;
     int chat_id;
 } message_t;
-
-static int minimize_permissions(void)
-{
-    struct passwd *pwdp = getpwnam(USERNAME);
-    if (pwdp == NULL) {
-        perror("getpwnam() failed");
-        return -1;
-    }
-
-    if (pwdp->pw_uid == 0) {
-        printf("user %s is privileged", USERNAME);
-        return -1;
-    }
-
-    if (setgid(pwdp->pw_gid) < 0 || setuid(pwdp->pw_uid) < 0) {
-        printf("can't change IDs to user %s", USERNAME);
-        return -1;
-    }
-
-    return 0;
-}
 
 static int init_server_socket(const char *port)
 {
@@ -226,7 +207,7 @@ static int send_message(int chat_id, char *text)
     char msg_buf[msg_len];
     snprintf(msg_buf, msg_len, REQUEST_PATTERN, getenv("TOKEN"), (int)strlen(data_buf), data_buf);
 
-    int sock = init_client_socket(HOST, PORT);
+    int sock = init_client_socket(HOST, SENDPORT);
     if (sock < 0) {
         puts("Cannot init socket");
         return -1;
@@ -289,14 +270,11 @@ int main(void)
         return -1;
     }
 
-    int socket_listen = init_server_socket(PORT);
+    int socket_listen = init_server_socket(LISTENPORT);
     if (socket_listen < 0) {
         puts("Cannot init listen socket");
         return -1;
     }
-
-    if (minimize_permissions() < 0)
-        puts("Cannot minimize permissions");
 
     puts("Waiting for connections...");
     while (1) {

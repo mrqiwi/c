@@ -3,25 +3,23 @@
 -out YOURPUBLIC.crt \
 -subj "/C=RU/ST=Saint-Petersburg/L=Saint-Petersburg/O=Example Inc/CN=<IP-address>"
 // 2) openssl x509 -in YOURPUBLIC.crt -out YOURPUBLIC.pem -outform PEM
-// 3) curl -F "url=https://<IP-address>:443/<TOKEN>" -F "certificate=@YOURPUBLIC.pem" https://api.telegram.org/bot<TOKEN>/setWebhook
+// 3) curl -F "url=https://<IP-address>:8443/<TOKEN>" -F "certificate=@YOURPUBLIC.pem" https://api.telegram.org/bot<TOKEN>/setWebhook
 #include <string.h>
 #include <unistd.h>
 #include <netdb.h>
-#include <pwd.h>
 #include <jansson.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
 #define BSIZE 1024*10
 #define MSGSIZE 4096
-#define USERNAME "sergey"
 #define PRIVATEKEY "YOURPRIVATE.key"
 #define CERTIFICATE "YOURPUBLIC.crt"
 #define LISTENPORT "8443"
 #define SENDPORT "443"
 #define HOST "api.telegram.org"
 #define REQUEST_PATTERN "POST /bot%s/sendMessage HTTP/1.1\r\n" \
-                        "Host: myhost.com\r\n" \
+                        "Host: %s\r\n" \
                         "Content-Type: application/json\r\n" \
                         "Content-Length: %d\r\n" \
                         "Connection: close\r\n\r\n%s"
@@ -104,12 +102,14 @@ static int init_client_socket(const char *host, const char *port)
     int socket_peer = socket(peer_address->ai_family, peer_address->ai_socktype, peer_address->ai_protocol);
     if (socket_peer < 0) {
         perror("socket() failed");
+        freeaddrinfo(peer_address);
         return -1;
     }
 
     puts("Connecting...");
     if (connect(socket_peer, peer_address->ai_addr, peer_address->ai_addrlen)) {
         perror("connect() failed");
+        freeaddrinfo(peer_address);
         return -1;
     }
 
@@ -145,31 +145,9 @@ static int parse_msg_data(const char *request, message_t *msg)
         return -1;
     }
 
-    snprintf(msg->text, BSIZE, "%s", text ? text: "");
+    snprintf(msg->text, MSGSIZE, "%s", text ? text: "");
     json_decref(data);
     return 0;
-}
-
-ssize_t sendall(SSL *ssl, const void *buffer, size_t n)
-{
-    ssize_t written;
-    size_t total;
-    const char *buf;
-
-    buf = buffer;
-    for (total = 0; total < n; ) {
-        written = SSL_write(ssl, buf, n - total);
-
-        if (written <= 0) {
-            if (written == -1 && errno == EINTR)
-                continue;
-            else
-                return -1;
-        }
-        total += written;
-        buf += written;
-    }
-    return total;
 }
 
 ssize_t recvall(SSL *ssl, void *buffer, size_t n)
@@ -203,9 +181,9 @@ static int send_message(int chat_id, char *text)
     char data_buf[data_len];
     snprintf(data_buf, data_len, "{\"chat_id\":%d,\"text\":\"%s\"}", chat_id, text);
 
-    int msg_len = snprintf(NULL, 0, REQUEST_PATTERN, getenv("TOKEN"), (int)strlen(data_buf), data_buf) + 1;
+    int msg_len = snprintf(NULL, 0, REQUEST_PATTERN, getenv("TOKEN"), HOST, (int)strlen(data_buf), data_buf) + 1;
     char msg_buf[msg_len];
-    snprintf(msg_buf, msg_len, REQUEST_PATTERN, getenv("TOKEN"), (int)strlen(data_buf), data_buf);
+    snprintf(msg_buf, msg_len, REQUEST_PATTERN, getenv("TOKEN"), HOST, (int)strlen(data_buf), data_buf);
 
     int sock = init_client_socket(HOST, SENDPORT);
     if (sock < 0) {
@@ -213,16 +191,23 @@ static int send_message(int chat_id, char *text)
         return -1;
     }
 
+    SSL_library_init();
+    OpenSSL_add_all_algorithms();
+    SSL_load_error_strings();
+
     /* SSL_CTX *ctx = SSL_CTX_new(TLS_client_method()); */
     SSL_CTX *ctx = SSL_CTX_new(SSLv23_client_method());
     if (!ctx) {
         puts("SSL_CTX_new() failed");
+        close(sock);
         return -1;
     }
 
     SSL *ssl = SSL_new(ctx);
     if (!ssl) {
         puts("SSL_new() failed");
+        close(sock);
+        SSL_CTX_free(ctx);
         return -1;
     }
 
@@ -230,16 +215,24 @@ static int send_message(int chat_id, char *text)
     if (SSL_connect(ssl) == -1) {
         puts("SSL_connect() failed");
         ERR_print_errors_fp(stdout);
+        SSL_shutdown(ssl);
+        close(sock);
+        SSL_free(ssl);
+        SSL_CTX_free(ctx);
         return -1;
     }
 
-    int nbytes = sendall(ssl, msg_buf, strlen(msg_buf));
+    int nbytes = SSL_write(ssl, msg_buf, strlen(msg_buf));
     if (nbytes < 0) {
         puts("SSL_write() failded");
+        SSL_shutdown(ssl);
+        close(sock);
+        SSL_free(ssl);
+        SSL_CTX_free(ctx);
         return -1;
     }
 
-    printf("Sent %d of %d bytes: %s\n\n", nbytes, (int)strlen(msg_buf), msg_buf);
+    printf("Sent %d of %d bytes:\n %s\n\n", nbytes, (int)strlen(msg_buf), msg_buf);
 
     SSL_shutdown(ssl);
     close(sock);
@@ -296,6 +289,7 @@ int main(void)
         SSL *ssl = SSL_new(ctx);
         if (!ssl) {
             puts("SSL_new() failed");
+            close(socket_client);
             return -1;
         }
 
@@ -303,8 +297,6 @@ int main(void)
         if (SSL_accept(ssl) <= 0) {
             puts("SSL_accept() failed");
             ERR_print_errors_fp(stdout);
-
-            SSL_shutdown(ssl);
             close(socket_client);
             SSL_free(ssl);
             continue;
@@ -316,7 +308,6 @@ int main(void)
         char request[BSIZE];
         int nbytes = recvall(ssl, request, BSIZE);
         if (nbytes < 0) {
-            SSL_shutdown(ssl);
             close(socket_client);
             SSL_free(ssl);
             continue;
@@ -328,13 +319,14 @@ int main(void)
         message_t msg;
         if (parse_msg_data(request, &msg) < 0) {
             puts("Cannot parse data from request");
+            close(socket_client);
+            SSL_free(ssl);
             return -1;
         }
-
+        //NOTE сервер не понимает, что мы получили сообщение
         char *response = "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n";
         nbytes = SSL_write(ssl, response, strlen(response));
         if (nbytes < 0) {
-            SSL_shutdown(ssl);
             close(socket_client);
             SSL_free(ssl);
             continue;
@@ -342,14 +334,15 @@ int main(void)
 
         printf("Sent %d of %d bytes: %s\n\n", nbytes, (int)strlen(response), response);
 
-        SSL_shutdown(ssl);
-        close(socket_client);
-        SSL_free(ssl);
-
         if (send_message(msg.chat_id, msg.text) < 0) {
             puts("Cannot send message");
+            close(socket_client);
+            SSL_free(ssl);
             continue;
         }
+
+        close(socket_client);
+        SSL_free(ssl);
     }
 
     puts("Closing listening socket...\n");
